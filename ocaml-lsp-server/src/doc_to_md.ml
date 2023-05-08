@@ -3,8 +3,15 @@ open Cmarkit
 
 (** TODO:
 
-    - Support meta from odoc-parser locations
-    - Add support for references *)
+    - Add support for references
+    - Broken lists
+    - Labels in headers
+    - Align text with HTML
+    - Verbatim is indented in tests
+
+    Unsupported (next):
+
+    - Support meta from odoc-parser locations *)
 
 type t =
   | Raw of string
@@ -278,19 +285,8 @@ and block_element_list_to_block l =
 let translate doc : t =
   let location = Lexing.dummy_pos in
   let v = Odoc_parser.parse_comment ~location ~text:doc in
-  match Odoc_parser.warnings v with
-  | [] ->
-    let ast = Odoc_parser.ast v in
-    let block = block_element_list_to_block ast in
-    let doc = Doc.make block in
-    let cmark = Cmarkit_commonmark.of_doc doc in
-    Markdown cmark
-  | warnings ->
-    let messages =
-      List.map
-        ~f:(fun warn -> ("msg", `String (Odoc_parser.Warning.to_string warn)))
-        warnings
-    in
-    Log.log ~section:"debug" (fun () ->
-        Log.msg "Invalid documentation comment" messages);
-    Raw doc
+  let ast = Odoc_parser.ast v in
+  let block = block_element_list_to_block ast in
+  let doc = Doc.make block in
+  let cmark = Cmarkit_commonmark.of_doc doc in
+  Markdown cmark
