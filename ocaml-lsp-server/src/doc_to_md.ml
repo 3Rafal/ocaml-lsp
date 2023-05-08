@@ -1,6 +1,11 @@
 open Import
 open Cmarkit
 
+(** TODO:
+
+    - Support meta from odoc-parser locations
+    - Add support for references *)
+
 type t =
   | Raw of string
   | Markdown of string
@@ -141,36 +146,98 @@ and nestable_block_element_list_to_block nestables =
   let blocks = List.map ~f:nestable_block_element_to_block nestables in
   Block.Blocks (blocks, Meta.none)
 
-let tag_to_paragraph (tag : Odoc_parser.Ast.tag) =
-  let format_tag tag text =
-    Inline.Inlines
-      ( [ Inline.Strong_emphasis
-            (Inline.Emphasis.make (Inline.Text (tag, Meta.none)), Meta.none)
-        ; Inline.Text (text, Meta.none)
-        ]
-      , Meta.none )
+let strong_and_emphasis s =
+  Inline.Emphasis
+    ( Inline.Emphasis.make
+        (Inline.Strong_emphasis
+           (Inline.Emphasis.make (Inline.Text (s, Meta.none)), Meta.none))
+    , Meta.none )
+
+let inline_code_span_of_string s =
+  Inline.Code_span
+    ( Inline.Code_span.make ~backtick_count:1 (Block_line.tight_list_of_string s)
+    , Meta.none )
+
+let inline_link_of_string ~text uri =
+  let ref =
+    `Inline (Link_definition.make ~dest:(uri, Meta.none) (), Meta.none)
   in
-  let tag, text =
-    (* TODO: add support for tags *)
-    match[@warning "-27"] tag with
-    | `Author s -> ("@author", s)
-    | `Deprecated text -> ("@deprecated", "")
-    | `Param (id, text) -> ("@param", "")
-    | `Raise (exc, text) -> ("@raise", "")
-    | `Return text -> ("@return", "")
-    | `See (`Url, url, text) -> ("@see", "")
-    | `See (`File, filename, text) -> ("@see", "")
-    | `See (`Document, document, text) -> ("@see", "")
-    | `Since s -> ("@since", "")
-    | `Before (version, text) -> ("@before", "")
-    | `Version s -> ("@version", "")
-    | `Canonical s -> ("@canonical", "")
-    | `Inline -> ("@inline", "")
-    | `Open -> ("@open", "")
-    | `Closed -> ("@closed", "")
+  Inline.Link (Inline.Link.make (Inline.Text (text, Meta.none)) ref, Meta.none)
+
+let tag_to_block ~meta (tag : Odoc_parser.Ast.tag) =
+  let format_tag_empty tag =
+    Block.Paragraph (Block.Paragraph.make (strong_and_emphasis tag), Meta.none)
   in
-  let inline = format_tag tag text in
-  Block.Paragraph.make inline
+  let format_tag_string tag text =
+    let inline =
+      Inline.Inlines
+        ( [ strong_and_emphasis tag; Inline.Text (" ", Meta.none); text ]
+        , Meta.none )
+    in
+    Block.Paragraph (Block.Paragraph.make inline, meta)
+  in
+  let format_tag_block tag block =
+    let prefix =
+      Block.Paragraph (Block.Paragraph.make (strong_and_emphasis tag), Meta.none)
+    in
+    Block.Blocks ([ prefix; block ], meta)
+  in
+  let format_tag_string_with_block tag text block =
+    let prefix =
+      let inline =
+        Inline.Inlines
+          ( [ strong_and_emphasis tag; Inline.Text (" ", Meta.none); text ]
+          , Meta.none )
+      in
+      Block.Paragraph (Block.Paragraph.make inline, Meta.none)
+    in
+    Block.Blocks ([ prefix; block ], meta)
+  in
+  match tag with
+  | `Author s ->
+    let s = Inline.Text (s, Meta.none) in
+    format_tag_string "@author" s
+  | `Deprecated text ->
+    let block = nestable_block_element_list_to_block text in
+    format_tag_block "@deprecated" block
+  | `Param (id, []) ->
+    let id = Inline.Text (id, Meta.none) in
+    format_tag_string "@param" id
+  | `Param (id, text) ->
+    let block = nestable_block_element_list_to_block text in
+    let id = inline_code_span_of_string id in
+    format_tag_string_with_block "@param" id block
+  | `Raise (exc, text) ->
+    let block = nestable_block_element_list_to_block text in
+    let exc = inline_code_span_of_string exc in
+    format_tag_string_with_block "@raise" exc block
+  | `Return text ->
+    let block = nestable_block_element_list_to_block text in
+    format_tag_block "@return" block
+  | `See (`Url, uri, text) ->
+    let block = nestable_block_element_list_to_block text in
+    let uri = inline_link_of_string ~text:"link" uri in
+    format_tag_string_with_block "@see" uri block
+  | `See ((`File | `Document), uri, text) ->
+    let block = nestable_block_element_list_to_block text in
+    let uri = inline_code_span_of_string uri in
+    format_tag_string_with_block "@see" uri block
+  | `Since version ->
+    let version = inline_code_span_of_string version in
+    format_tag_string "@since" version
+  | `Before (version, text) ->
+    let block = nestable_block_element_list_to_block text in
+    let version = inline_code_span_of_string version in
+    format_tag_string_with_block "@before" version block
+  | `Version version ->
+    let version = inline_code_span_of_string version in
+    format_tag_string "@version" version
+  | `Canonical { value = s; location = _ } ->
+    let s = Inline.Text (s, Meta.none) in
+    format_tag_string "@canonical" s
+  | `Inline -> format_tag_empty "@inline"
+  | `Open -> format_tag_empty "@open"
+  | `Closed -> format_tag_empty "@closed"
 
 let rec block_element_to_block
     (block_element :
@@ -182,9 +249,8 @@ let rec block_element_to_block
     let meta = loc_to_meta location in
     Block.Heading (heading, meta)
   | Odoc_parser.Loc.{ value = `Tag t; location } ->
-    let paragraph = tag_to_paragraph t in
     let meta = loc_to_meta location in
-    Block.Paragraph (paragraph, meta)
+    tag_to_block ~meta t
   | Odoc_parser.Loc.
       { value =
           ( `Paragraph _
@@ -197,7 +263,16 @@ let rec block_element_to_block
       } as nestable -> nestable_block_element_to_block nestable
 
 and block_element_list_to_block l =
-  let blocks = List.map ~f:block_element_to_block l in
+  let rec aux acc rest =
+    match rest with
+    | [] -> List.rev acc
+    | el :: [] -> List.rev (block_element_to_block el :: acc)
+    | el :: rest ->
+      aux
+        (Block.Blank_line ("", Meta.none) :: block_element_to_block el :: acc)
+        rest
+  in
+  let blocks = aux [] l in
   Block.Blocks (blocks, Meta.none)
 
 let translate doc : t =

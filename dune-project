@@ -57,7 +57,7 @@ possible and does not make any assumptions about IO.
   dune-build-info
   spawn
   cmarkit
-  odoc-parser
+  (odoc-parser (>= 2.0.0))
   (ppx_expect (and (>= v0.15.0) :with-test))
   (ocamlformat (and :with-test (= 0.24.1)))
   (ocamlc-loc (and (>= 3.5.0) (< 3.7.0)))

@@ -292,27 +292,33 @@ describe_opt("textDocument/completion", () => {
               This function has a nice documentation.
 
               It performs division of two integer numbers.
-              * * *
-              ***@param*** \`x\` dividend
 
+              ***@param*** \`x\`
+              dividend
+    
               ***@param*** divisor
-
-              ***@return*** *quotient*, i.e. result of division
-
-              ***@raise*** \`Division_by_zero\` raised when divided by zero
-
-              ***@see*** [link](https://en.wikipedia.org/wiki/Arithmetic#Division_(%C3%B7,_or_/)) article
-
-              ***@see*** \`arithmetic.ml\` for more context
-
+    
+              ***@return***
+              *quotient*, i.e. result of division
+    
+              ***@raise*** \`Division_by_zero\`
+              raised when divided by zero
+    
+              ***@see*** [link](https://en.wikipedia.org/wiki/Arithmetic#Division_\\(%C3%B7,_or_/\\))
+              article
+    
+              ***@see*** \`arithmetic.ml\`
+              for more context
+    
               ***@since*** \`4.0.0\`
-
+    
               ***@before*** \`4.4.0\`
-
-              ***@deprecated*** use \`(/)\`
-
+    
+              ***@deprecated***
+              use \`(/)\`
+    
               ***@version*** \`1.0.0\`
-
+    
               ***@author*** John Doe
               `,
           },
