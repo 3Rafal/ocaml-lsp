@@ -381,14 +381,12 @@ describe_opt("textDocument/completion", () => {
               \`\`\`
               let square x = x * x
               let result = square 3
-              let result = square 3
               \`\`\`
               
               ### Verbatim
               
               \`\`\`verb
                   This text will be displayed verbatim.
-                  No formatting will be applied.
                   No formatting will be applied.
               \`\`\`
               
