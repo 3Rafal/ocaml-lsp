@@ -76,13 +76,6 @@ and inline_element_list_to_inlines inlines =
   let inlines = List.map ~f:inline_element_to_inline inlines in
   Inline.Inlines (inlines, Meta.none)
 
-(** Hack: Because of bug described here:
-    https://github.com/dbuenzli/cmarkit/issues/7 , we use only first block line.
-    It contains whole string, which seems good enough for our use cases. To be
-    removed when: https://github.com/dbuenzli/cmarkit/pull/8 gets merged and
-    released *)
-let block_lines_of_string str = [ List.hd (Block_line.list_of_string str) ]
-
 let rec nestable_block_element_to_block
     (nestable :
       Odoc_parser.Ast.nestable_block_element Odoc_parser.Loc.with_location) =
@@ -140,18 +133,18 @@ let rec nestable_block_element_to_block
       | Some ({ value = lang; location = lang_log }, _env) ->
         Some (lang, loc_to_meta lang_log)
     in
-    let block_line = block_lines_of_string code in
+    let block_line = Block_line.list_of_string code in
     let code_block = Block.Code_block.make ?info_string block_line in
     let meta = loc_to_meta location in
     Block.Code_block (code_block, meta)
   | Odoc_parser.Loc.{ value = `Verbatim code; location } ->
     let info_string = Some ("verb", Meta.none) in
-    let block_line = block_lines_of_string code in
+    let block_line = Block_line.list_of_string code in
     let code_block = Block.Code_block.make ?info_string block_line in
     let meta = loc_to_meta location in
     Block.Code_block (code_block, meta)
   | Odoc_parser.Loc.{ value = `Math_block code; location } ->
-    let block_line = block_lines_of_string code in
+    let block_line = Block_line.list_of_string code in
     let code_block = Block.Code_block.make block_line in
     let meta = loc_to_meta location in
     Block.Ext_math_block (code_block, meta)
